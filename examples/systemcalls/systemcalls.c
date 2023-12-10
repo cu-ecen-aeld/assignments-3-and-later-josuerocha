@@ -1,4 +1,8 @@
 #include "systemcalls.h"
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <stdlib.h>
 
 /**
  * @param cmd the command to execute with system()
@@ -9,15 +13,14 @@
 */
 bool do_system(const char *cmd)
 {
-
-/*
- * TODO  add your code here
- *  Call the system() function with the command set in the cmd
- *   and return a boolean true if the system() call completed with success
- *   or false() if it returned a failure
-*/
-
-    return true;
+    int code = system(cmd);
+    bool is_success;
+    if(code == 0) {
+        is_success = true;
+    } else {
+        is_success = false;
+    }
+    return is_success;
 }
 
 /**
@@ -45,12 +48,8 @@ bool do_exec(int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
 /*
- * TODO:
  *   Execute a system command by calling fork, execv(),
  *   and wait instead of system (see LSP page 161).
  *   Use the command[0] as the full path to the command to execute
@@ -58,6 +57,21 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    fflush(stdout);
+    pid_t pid = fork();
+
+    if(pid == -1) {
+        // Failed to fork
+        return false;
+    } else if (pid > 0){
+        // Parent
+        int status;
+        waitpid(pid, &status, 0);
+    } {
+        // Child has the control
+        execv(command[0], command);
+        return false;
+    }
 
     va_end(args);
 
@@ -80,20 +94,35 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         command[i] = va_arg(args, char *);
     }
     command[count] = NULL;
-    // this line is to avoid a compile warning before your implementation is complete
-    // and may be removed
-    command[count] = command[count];
 
 
 /*
- * TODO
  *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
  *   redirect standard out to a file specified by outputfile.
  *   The rest of the behaviour is same as do_exec()
  *
 */
+    fflush(stdout);
+    pid_t pid = fork();
+    int fd = open("redirected.txt", O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    if (fd < 0) { perror("open"); return false; }
+    if(pid == -1) {
+        // Failed to fork
+        perror("fork");
+        return false;
+    } else if (pid > 0){
+        // Parent
+        int status;
+        waitpid(pid, &status, 0);
+    } {
+        // Child has the control
+        if (dup2(fd, 1) < 0) { perror("dup2"); return false; }
+        close(fd);
+        execv(command[0], command);
+        return false;
+    }
 
     va_end(args);
-
+    close(fd);
     return true;
 }
