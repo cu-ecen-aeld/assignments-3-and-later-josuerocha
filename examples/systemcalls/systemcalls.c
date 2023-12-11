@@ -57,16 +57,28 @@ bool do_exec(int count, ...)
  *   as second argument to the execv() command.
  *
 */
+    // Return when command path is not absolute
+    if(command[0][0] != '/') return false;
+    
     fflush(stdout);
     pid_t pid = fork();
 
     if(pid == -1) {
         // Failed to fork
+        perror("Failed to fork");
         return false;
     } else if (pid > 0){
         // Parent
         int status;
         waitpid(pid, &status, 0);
+
+        if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+            return true;
+        } else {
+            perror("Command execution failed");
+            return false;
+        }
+
     } {
         // Child has the control
         execv(command[0], command);
@@ -97,14 +109,16 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
 
 
 /*
- *   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
- *   redirect standard out to a file specified by outputfile.
- *   The rest of the behaviour is same as do_exec()
- *
+*   Call execv, but first using https://stackoverflow.com/a/13784315/1446624 as a refernce,
+*   redirect standard out to a file specified by outputfile.
+*   The rest of the behaviour is same as do_exec()
+*
 */
+    if(command[0][0] != '/') return false;
+
     fflush(stdout);
     pid_t pid = fork();
-    int fd = open("redirected.txt", O_WRONLY|O_TRUNC|O_CREAT, 0644);
+    int fd = open(outputfile, O_WRONLY|O_TRUNC|O_CREAT, 0644);
     if (fd < 0) { perror("open"); return false; }
     if(pid == -1) {
         // Failed to fork
@@ -114,6 +128,13 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
         // Parent
         int status;
         waitpid(pid, &status, 0);
+
+        if (WIFEXITED(status) && !WEXITSTATUS(status)) {
+            return true;
+        } else {
+            perror("Command execution failed");
+            return false;
+        }
     } {
         // Child has the control
         if (dup2(fd, 1) < 0) { perror("dup2"); return false; }
